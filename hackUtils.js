@@ -31,7 +31,7 @@ export function batchScanner(ns) {
 
 /** @param {NS} ns */
 //Copys all relevant files to the batch servers(Because I forgot it LMAO)
-export async function batchServerFileCopier(ns, batchServers, SCRIPTS) {
+export function batchServerFileCopier(ns, batchServers, SCRIPTS) {
   for (let server of batchServers) {
     let name = server.name;
     for (let script in SCRIPTS) {
@@ -42,33 +42,40 @@ export async function batchServerFileCopier(ns, batchServers, SCRIPTS) {
 
 /** @param {NS} ns */
 //Uses data from initial server array to give scores to potential targets, Then finds the best target from the map, returning the name of the best target.
-export function bestTargetFinder(ns) {
+export async function bestTargetFinder(ns) {
   let servers = scanner(ns);
-  const hackableTargets = new Map();
+  const hackableTargets = [];
   let hackingLevel = ns.getHackingLevel();
-  let maxWeakenTime = (60000 * 15);
   let topServerCalc = 0;
   let bestTarget;
+  const maxWeakenTime = 15 * 60 * 1000;
   for (let server of servers) {
     let serverHackingLevel = ns.getServerRequiredHackingLevel(server);
-    if (hackingLevel >= serverHackingLevel / 2) {
+    if (hackingLevel >= serverHackingLevel * 2) {
       let minSecurity = ns.getServerMinSecurityLevel(server);
       let maxMoney = ns.getServerMaxMoney(server);
       let weakenTime = ns.getWeakenTime(server);
-      if (ns.hasRootAccess(server) && weakenTime < maxWeakenTime && !ns.getPurchasedServers().includes(server) && server !== "home") {
-        let calculations = (100 - minSecurity) * maxMoney * (maxWeakenTime - weakenTime);
-        if (calculations !== 0) {
-          hackableTargets.set(server, calculations);
+      debugger;
+      if (ns.hasRootAccess(server) && !ns.getPurchasedServers().includes(server) && server !== "home" && weakenTime < maxWeakenTime) {
+        let calculations = (100 - minSecurity) * maxMoney * ((maxWeakenTime - weakenTime) / 2);
+        let target = {
+          calculations: calculations,
+          name: server,
         }
+        hackableTargets.push(target);
       }
     }
   }
-  hackableTargets.forEach((calculations, server) => {
-    if (calculations >= topServerCalc) {
-      topServerCalc = calculations;
-      bestTarget = server;
+  if (hackableTargets.length < 1) {
+    throw new Error("No target found. Something has gone terribly wrong.");
+  }
+  for (let target of hackableTargets) {
+    const calculations = target.calculations;
+    const name = target.name;
+    if (calculations > topServerCalc) {
+      bestTarget = name;
     }
-  });
+  }
 
   return bestTarget;
 }
@@ -102,6 +109,9 @@ export async function prep(ns, targetInfo, batchServers) {
   let gThreads = Math.ceil(ns.growthAnalyze(target, maxMoney / moneyAvailable));
   let wThreads2 = Math.ceil(ns.growthAnalyzeSecurity(gThreads) / 0.05);
   let gJobs = 0;
+  const wTime = targetInfo.times.weaken1;
+  const gTime = targetInfo.times.grow;
+  const spacer = targetInfo.spacer;
   for (let server of batchServers) {
     let loop = true;
     let name = server.name;
@@ -176,16 +186,13 @@ export async function prep(ns, targetInfo, batchServers) {
   ns.tprint(`Total time to batch: ${(wTime + spacer * 3) / 1000} seconds`);
   ns.tprint(`Weakening from ${sec} to ${minSec}`);
   ns.tprint(`Growing from ${moneyAvailable} to ${maxMoney}`);
-  sleepTime = wTime + (spacer * 3);
-  await ns.sleep(sleepTime);
-  ns.tprint(`Prep complete. Batching can continue.`);
 }
 
 /** @param {NS} ns */
 //Will find the most efficent batch size for the given target on the basis of the largest amount of ram available. 
 //Partially ripped from the batch guide by Dark Technomancer, but everything was handwritten and put into a level I could understand(coding for two months :( ).
 //Uses minimum because I want to actually use servers that aren't my home one + I have ambitions for a shotgun batcher, so yeah :3
-export async function greedFinder(ns, info, batchServers) {
+export function greedFinder(ns, info, batchServers) {
   let greed = 0.99
   const greedStepValue = 0.01;
   const minGreed = 0.01;
@@ -200,9 +207,9 @@ export async function greedFinder(ns, info, batchServers) {
     let maxRam = server.maxRam;
     let ramAvailable;
     if (name === "home") {
-      ramAvailable = (maxRam - reservedRam) / 4;
+      ramAvailable = Math.max((maxRam - reservedRam - ns.getServerUsedRam(name)), 10000);
     } else {
-      ramAvailable = maxRam - ns.getServerUsedRam(name);
+      ramAvailable = Math.max((maxRam - ns.getServerUsedRam(name)), 1);
     }
     const serverObject = {
       name: name,
@@ -250,28 +257,29 @@ export async function blastingTime(ns, batchServers, info, TYPES, COSTS, SCRIPTS
     let maxRam = server.maxRam;
     totalRam += maxRam;
   }
-  let batch = testBatch();
   let batchFailed = false;
   do {
+    let batch = testBatch();
     for (let job in batch) {
-      const jobThreads = job.jobThreads;
-      const ramNeeded = jobThreads * COSTS[job.type];
-      const found = false;
+      const Job = batch[job];
+      const jobThreads = Job.jobThreads;
+      const ramNeeded = jobThreads * COSTS[Job.type];
+      let found = false;
       for (let server of servers) {
         const name = server.name;
         const maxRam = server.maxRam;
-        const ramAssigned = server.ramAssigned;
+        let assignedRam = server.assignedRam;
         let ramAvailable;
         if (name == "home") {
-          ramAvailable = maxRam - ramAssigned - reservedRam;
+          ramAvailable = maxRam - assignedRam - reservedRam - ns.getServerUsedRam(name);
         } else {
-          ramAvailable = maxRam - ramAssigned;
+          ramAvailable = maxRam - assignedRam - ns.getServerUsedRam(name);
         }
         if (ramAvailable >= ramNeeded) {
           found = true;
-          server.ramAssigned += ramNeeded;
+          server.assignedRam += ramNeeded;
           totalRam -= ramNeeded;
-          job.server = name;
+          Job.server = name;
         }
         if (found == true) break;
       }
@@ -280,11 +288,13 @@ export async function blastingTime(ns, batchServers, info, TYPES, COSTS, SCRIPTS
         break;
       }
     }
-    batches.push(batch);
-  } while (totalRam > 0 || batchFailed == false);
+    if (batchFailed == false) {
+      batches.push(batch)
+    }
+  } while (totalRam > 0 && batchFailed == false);
 
   function testBatch() {
-    let batch = {}; 
+    let batch = {};
     for (let type of TYPES) {
       batch[type] = testJob(type);
     }
