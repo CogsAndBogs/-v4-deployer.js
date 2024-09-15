@@ -1,6 +1,5 @@
-/** @param {NS} ns */
 import * as utils from "hackUtils.js"
-
+/** @param {NS} ns */
 class TargetInfo {
   constructor(ns, target) {
     this.target = target;
@@ -9,7 +8,7 @@ class TargetInfo {
     this.minSec = ns.getServerMinSecurityLevel(target);
     this.sec = ns.getServerSecurityLevel(target);
     this.greed = 0.1;
-    this.spacer = 5;
+    this.spacer = 1;
 
     this.times = { hack: 0, weaken1: 0, grow: 0, weaken2: 0 };
     this.threads = { hack: 0, weaken1: 0, grow: 0, weaken2: 0 };
@@ -32,13 +31,12 @@ class TargetInfo {
     this.delays.weaken1 = 0;
     this.delays.grow = hTime * 4 - hTime * 3.2;
     this.delays.weaken2 = 0;
-    this.threads.hack = Math.ceil(ns.hackAnalyzeThreads(target, maxMoney * greed));
-    this.threads.weaken1 = Math.ceil(this.threads.hack * hSecDecrease / wSecIncrease);
-    const singleThreadTake = ns.hackAnalyze(target);
-    const allThreadTake = singleThreadTake * this.threads.hack;
-    const multFactor = maxMoney / (maxMoney - (maxMoney - allThreadTake))
-    this.threads.grow = Math.ceil(ns.growthAnalyze(target, multFactor));
-    this.threads.weaken2 = Math.ceil(this.threads.grow * gSecDecrease / wSecIncrease);
+    this.threads.hack = Math.max(Math.ceil(ns.hackAnalyzeThreads(target, maxMoney * greed)), 1);
+    this.threads.weaken1 = Math.max(Math.ceil(this.threads.hack * hSecDecrease / wSecIncrease), 1);
+    const amountTaken = maxMoney * greed;
+    const multFactor = maxMoney / (maxMoney - amountTaken);
+    this.threads.grow = Math.max(Math.ceil(ns.growthAnalyze(target, multFactor)), 1);
+    this.threads.weaken2 = Math.max(Math.ceil(this.threads.grow * gSecDecrease / wSecIncrease), 1);
   }
 }
 
@@ -47,43 +45,45 @@ const SCRIPTS = { hack: "/shared/tHack.js", weaken1: "/shared/tWeaken1.js", grow
 const COSTS = { hack: 1.70, weaken1: 1.75, grow: 1.75, weaken2: 1.75 };
 /** @param {NS} ns */
 export async function main(ns) {
-  let batchServers = utils.batchScanner(ns);
-  let target = utils.bestTargetFinder(ns);
-  const targetInfo = new TargetInfo(ns, target);
-  let offset = 0;
-  await utils.batchServerFileCopier(ns, batchServers, SCRIPTS);
-  if (!utils.prepChecker(ns, target)) await utils.prep(ns, targetInfo, batchServers);
-  targetInfo.greed = await utils.greedFinder(ns, targetInfo, batchServers);
-  targetInfo.calc(ns);
+  ns.tail();
+  ns.disableLog("ALL");
+  const port = ns.pid;
   while (true) {
     let batchServers = utils.batchScanner(ns);
-    ns.clearPort(ns.pid);
+    let target = await utils.bestTargetFinder(ns);
+    const targetInfo = new TargetInfo(ns, target);
+    let offset = 0;
+    targetInfo.greed = utils.greedFinder(ns, targetInfo, batchServers);
+    ns.print(`Target: ${targetInfo.target}`);
+    ns.print(`Amount to be stolen: ${targetInfo.greed * targetInfo.maxMoney }`);
+    ns.print(`Greed value: ${targetInfo.greed}`);
+    targetInfo.calc(ns);
+    utils.batchServerFileCopier(ns, batchServers, SCRIPTS);
+    if (!utils.prepChecker(ns, target)) await utils.prep(ns, targetInfo, batchServers, port);
+    await ns.sleep(100);
+    ns.clearPort(port);
     let batches = await utils.blastingTime(ns, batchServers, targetInfo, TYPES, COSTS, SCRIPTS);
     for (let batch of batches) {
       for (let job in batch) {
-        const threads = job.jobThreads;
-        const script = job.script;
-        const server = job.server;
+        const type = batch[job];
+        const threads = type.jobThreads;
+        const script = type.script;
+        const server = type.server;
         const target = targetInfo.target;
-        const delay = job.delay + spacer * offset;
-        const port = ns.pid;
+        const delay = type.delay + targetInfo.spacer * offset;
         ns.exec(script, server, { temporary: true, threads: threads, }, target, delay, port);
         offset++;
       }
     }
-    ns.tprint(`All batches deployed. Batches should be finished in approximately ${targetInfo.time.weaken + targetInfo.spacer * offset}.`);
-    batches.reverse();
+    let time = ns.tFormat(targetInfo.times.weaken1 + targetInfo.spacer * offset);
+    ns.tprint(`All batches deployed. Batches should be finished in approximately ${time}.`);
+    let batchesComplete = 0;
     do {
-      await ns.nextPortWrite(ns.pid);
-      ns.clearPort(ns.pid);
-      batches.pop();
-    } while (batches.length > 0);
+      await ns.nextPortWrite(port);
+      ns.clearPort(port);
+      batchesComplete++;
+      ns.print(`Batch ${batchesComplete} finished`);
+    } while (batchesComplete < batches.length);
     ns.tprint(`Batches finished. Calculating for next batch...`);
-    let newBatchServers = utils.batchScanner(ns);
-    const newTarget = utils.bestTargetFinder(ns);
-    if (newTarget !== target) {
-      targetInfo.greed = await utils.greedFinder(ns, targetInfo, newBatchServers);
-      targetInfo.calc(ns);
-    }
   }
 }
