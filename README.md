@@ -1,9 +1,9 @@
 Hey there! If you are reading this, you have the misfortune of having to read my godawful code. Congrats! I'll try to explain all of the larger pieces with this document.
 
 The HackUtils: 
-  This little file contains all of the functions neccesary to make this batcher tick. It includes: 
+  This little file contains all of the functions neccesary to make this batcher tick. It includes:
    
-    batchScanner: Pretty self explanatory. Scans all of the possible servers, pulls out the purchased servers and home server, and then sorts them on the basis of available ram. You might notice that each server object contains a property known as assignedRam. This is going to be used in the shotgun blaster, to make the overall implementation simpler. 
+  batchScanner: Pretty self explanatory. Scans all of the possible servers, pulls out the purchased servers and home server, and then sorts them on the basis of available ram. You might notice that each server object contains a property known as assignedRam. This is going to be used in the shotgun blaster, to make the overall implementation simpler. 
     
     batchServerFileCopier: Again, self explanatory. Copys the required scripts into all of the batchServers, as previously defined in the batchScanner. Scripts come from the deployer, to make it more dynamic. 
     bestTargetFinder: As the name says, it finds the best target. It uses the scanner function to create a list of all servers, and then filters out the purchased servers and the home server. From there, it determines the hacking level of each server, and runs calculations if the hacking level is less than half of the player level AND if the time to weaken this server is less than 15 minutes. I could explain the calculations themselves, but I hope that thye are easy enough to follow. 
