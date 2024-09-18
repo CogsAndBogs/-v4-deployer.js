@@ -56,8 +56,8 @@ export async function bestTargetFinder(ns) {
       let maxMoney = ns.getServerMaxMoney(server);
       let weakenTime = ns.getWeakenTime(server);
       if (weakenTime > maxWeakenTime) maxWeakenTime = weakenTime;
-      if (ns.hasRootAccess(server) && !ns.getPurchasedServers().includes(server) && server !== "home" && weakenTime + 1000 < maxWeakenTime) {
-        let calculations = (100 - minSecurity) * maxMoney * ns.hackAnalyzeChance(server) * ((maxWeakenTime - weakenTime) / maxWeakenTime / 2);
+      if (ns.hasRootAccess(server) && !ns.getPurchasedServers().includes(server) && server !== "home" && weakenTime + 1000 < maxWeakenTime && server !== "fulcrumassets") {
+        let calculations = (100 - minSecurity) * maxMoney * ns.hackAnalyzeChance(server) * ((maxWeakenTime - weakenTime) / maxWeakenTime);
         let target = {
           calculations: calculations,
           name: server,
