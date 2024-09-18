@@ -48,16 +48,16 @@ export async function bestTargetFinder(ns) {
   let hackingLevel = ns.getHackingLevel();
   let topServerCalc = 0;
   let bestTarget;
-  const maxWeakenTime = 15 * 60 * 1000;
+  let maxWeakenTime = 0;
   for (let server of servers) {
     let serverHackingLevel = ns.getServerRequiredHackingLevel(server);
     if (hackingLevel >= serverHackingLevel * 2) {
       let minSecurity = ns.getServerMinSecurityLevel(server);
       let maxMoney = ns.getServerMaxMoney(server);
       let weakenTime = ns.getWeakenTime(server);
-      debugger;
-      if (ns.hasRootAccess(server) && !ns.getPurchasedServers().includes(server) && server !== "home" && weakenTime < maxWeakenTime) {
-        let calculations = (100 - minSecurity) * maxMoney * ((maxWeakenTime - weakenTime) / 2);
+      if (weakenTime > maxWeakenTime) maxWeakenTime = weakenTime;
+      if (ns.hasRootAccess(server) && !ns.getPurchasedServers().includes(server) && server !== "home" && weakenTime + 1000 < maxWeakenTime) {
+        let calculations = (100 - minSecurity) * maxMoney * ns.hackAnalyzeChance(server) * ((maxWeakenTime - weakenTime) / maxWeakenTime / 2);
         let target = {
           calculations: calculations,
           name: server,
@@ -182,10 +182,10 @@ export async function prep(ns, targetInfo, batchServers) {
     const delay = job.delay;
     ns.exec(script, server, { temporary: true, threads: threads }, targetInfo.target, delay);
   }
-  ns.tprint(`Information about prep: `);
-  ns.tprint(`Total time to batch: ${(wTime + spacer * 3) / 1000} seconds`);
-  ns.tprint(`Weakening from ${sec} to ${minSec}`);
-  ns.tprint(`Growing from ${moneyAvailable} to ${maxMoney}`);
+  ns.print(`Information about prep: `);
+  ns.print(`Total time to prep: Approximately ${ns.tFormat(wTime + spacer * 3)}`);
+  ns.print(`Weakening from ${sec} to ${minSec}`);
+  ns.print(`Growing from ${moneyAvailable} to ${maxMoney}`);
 }
 
 /** @param {NS} ns */
