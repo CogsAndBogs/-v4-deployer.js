@@ -21,6 +21,7 @@ class TargetInfo {
     const hSecDecrease = 0.002;
     const gSecDecrease = 0.004;
     const wSecIncrease = 0.05;
+    const pad = 0.2;
     this.moneyAvailable = ns.getServerMoneyAvailable(target);
     this.sec = ns.getServerSecurityLevel(target);
     this.times.hack = hTime;
@@ -35,7 +36,7 @@ class TargetInfo {
     this.threads.weaken1 = Math.max(Math.ceil(this.threads.hack * hSecDecrease / wSecIncrease), 1);
     const amountTaken = maxMoney * greed;
     const multFactor = maxMoney / (maxMoney - amountTaken);
-    this.threads.grow = Math.max(Math.ceil(ns.growthAnalyze(target, multFactor)), 1);
+    this.threads.grow = Math.max(Math.ceil(ns.growthAnalyze(target, multFactor) * (1 + pad)), 1);
     this.threads.weaken2 = Math.max(Math.ceil(this.threads.grow * gSecDecrease / wSecIncrease), 1);
   }
 }
@@ -55,7 +56,6 @@ export async function main(ns) {
     let offset = 0;
     targetInfo.greed = utils.greedFinder(ns, targetInfo, batchServers);
     ns.print(`Target: ${targetInfo.target}`);
-    ns.print(`Amount to be stolen: ${targetInfo.greed * targetInfo.maxMoney }`);
     ns.print(`Greed value: ${targetInfo.greed}`);
     targetInfo.calc(ns);
     utils.batchServerFileCopier(ns, batchServers, SCRIPTS);
@@ -76,7 +76,8 @@ export async function main(ns) {
       }
     }
     let time = ns.tFormat(targetInfo.times.weaken1 + targetInfo.spacer * offset);
-    ns.tprint(`All batches deployed. Batches should be finished in approximately ${time}.`);
+    ns.print(`All batches deployed. Batches should be finished in approximately ${time}.`);
+    ns.print(`Approximate amount to be stolen: ${ns.formatNumber(targetInfo.greed * targetInfo.maxMoney * offset * ns.hackAnalyzeChance(targetInfo.target))}`);
     let batchesComplete = 0;
     do {
       await ns.nextPortWrite(port);
